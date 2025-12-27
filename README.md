@@ -1,6 +1,6 @@
 # Black Cat
 
-Black Cat is a simple online **Hearts** clone inspired by the old Windows card game called “fekete macska”. I used to play it with friends during LAN parties between game sessions, and this project brings that same quick, social card game vibe to the web.
+Black Cat is a simple online **Hearts** clone inspired by the old Windows card game called “[fekete macska](https://hu.wikipedia.org/wiki/Fekete_d%C3%A1ma#Fekete_macska)”. I used to play it with friends during LAN parties between game sessions, and this project brings that same quick, social card game vibe to the web.
 
 ## Features
 - Online Hearts for 4 players
