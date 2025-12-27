@@ -96,6 +96,33 @@ button:disabled {
   margin-right: 6px;
 }
 
+.scoreboard {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: #141414;
+}
+
+.scoreboard-list {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.score-chip {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: #101010;
+  font-size: 13px;
+}
+
+.round-points {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .block {
   margin-top: 20px;
   padding-top: 12px;

@@ -30,6 +30,7 @@ class Room:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     next_action_at: float = 0.0
     bot_task: Optional[asyncio.Task] = None
+    trick_clear_task: Optional[asyncio.Task] = None
 
     def add_player(self, name: str, is_bot: bool = False) -> Optional[PlayerState]:
         if len(self.players) >= self.max_players:
@@ -135,6 +136,7 @@ async def room_socket(websocket: WebSocket, room_id: str, name: Optional[str] = 
                             delay = 0.8
                             if before_trick == len(room.players) - 1 and not room.game.state.trick:
                                 delay = 2.0
+                                schedule_trick_clear(room, delay)
                             schedule_bot_tick(room, delay)
 
                 await advance_bots(room)
@@ -183,8 +185,10 @@ async def send_state(room: Room, player_id: str) -> None:
         "players": players,
         "trick": [],
         "current_turn": game.state.current_turn if game else None,
+        "active_trick": bool(game.state.trick) if game else False,
         "hearts_broken": game.state.hearts_broken if game else False,
         "scores": game.state.scores if game else {},
+        "round_points": game.state.taken_points_round if game else {},
         "your_id": player_id,
         "hand": game.state.hands.get(player_id, []) if game else [],
         "legal_moves": game.get_legal_moves(player_id) if game and game.state.phase == "playing" else [],
@@ -223,6 +227,20 @@ def schedule_bot_tick(room: Room, delay: float) -> None:
 
     room.bot_task = asyncio.create_task(_runner())
 
+def schedule_trick_clear(room: Room, delay: float) -> None:
+    if room.trick_clear_task and not room.trick_clear_task.done():
+        room.trick_clear_task.cancel()
+
+    async def _runner() -> None:
+        await asyncio.sleep(max(0.0, delay))
+        async with room.lock:
+            game = room.game
+            if game and game.state.last_trick:
+                game.state.last_trick = []
+        await broadcast_state(room)
+
+    room.trick_clear_task = asyncio.create_task(_runner())
+
 
 async def advance_bots(room: Room) -> None:
     game = room.game
@@ -258,10 +276,12 @@ async def advance_bots(room: Room) -> None:
     if not legal:
         return
     card = choose_play(legal)
+    before_trick = len(game.state.trick)
     game.play_card(current, card)
 
     delay = 0.8
     if before_trick == len(room.players) - 1 and not game.state.trick:
         delay = 2.0
+        schedule_trick_clear(room, delay)
     room.next_action_at = time.monotonic() + delay
     schedule_bot_tick(room, delay)

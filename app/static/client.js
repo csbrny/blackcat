@@ -130,6 +130,25 @@ function seatOrder(players, yourId) {
   return order;
 }
 
+function renderScoreboard(players, roundPoints) {
+  const container = el("scoreboard-list");
+  if (!container) return;
+  container.innerHTML = "";
+  const sorted = [...players].sort((a, b) => a.score - b.score);
+  sorted.forEach((p) => {
+    const chip = document.createElement("div");
+    chip.className = "score-chip";
+    chip.textContent = `${p.name}: ${p.score}`;
+    container.appendChild(chip);
+  });
+
+  const roundEl = el("round-points");
+  if (roundEl) {
+    const entries = sorted.map((p) => `${p.name} ${roundPoints[p.id] ?? 0}`);
+    roundEl.textContent = entries.length ? `Round points: ${entries.join(" | ")}` : "";
+  }
+}
+
 function renderTable(data) {
   const seats = {
     south: el("seat-south"),
@@ -141,6 +160,7 @@ function renderTable(data) {
   const order = seatOrder(data.players, data.your_id);
   const placement = ["south", "west", "north", "east"];
   const trickMap = new Map(data.trick.map((play) => [play.player_id, play.card]));
+  const nameMap = new Map(data.players.map((p) => [p.id, p.name]));
 
   placement.forEach((pos, idx) => {
     const seat = seats[pos];
@@ -177,7 +197,14 @@ function renderTable(data) {
 
   const center = el("table-center");
   if (center) {
-    center.textContent = data.phase === "round_end" ? "Round over" : "Trick";
+    if (data.phase === "round_end") {
+      center.textContent = "Round over";
+    } else if (data.phase === "playing" && !data.active_trick) {
+      const currentName = nameMap.get(data.current_turn) || "player";
+      center.textContent = data.current_turn === data.your_id ? "Your lead" : `Waiting for ${currentName}`;
+    } else {
+      center.textContent = "Trick";
+    }
   }
 }
 
@@ -224,6 +251,7 @@ function renderState(data) {
   el("invite-link").textContent = `${window.location.origin}/room/${data.room_id}`;
 
   renderPlayers(data.players);
+  renderScoreboard(data.players, data.round_points || {});
 
   const isLobby = data.phase === "lobby";
   el("lobby").classList.toggle("hidden", !isLobby);
