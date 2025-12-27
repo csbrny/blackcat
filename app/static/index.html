@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blackcat Hearts</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="header">
+        <h1>Blackcat Hearts</h1>
+        <p>Simple online Hearts with bots and invite links.</p>
+      </header>
+
+      <section id="screen-home" class="panel">
+        <div class="row">
+          <input id="name-input" type="text" placeholder="Your name" maxlength="20" />
+        </div>
+        <div class="row">
+          <button id="create-room">Create room</button>
+        </div>
+        <div class="divider"></div>
+        <div class="row">
+          <input id="join-room-id" type="text" placeholder="Room ID" maxlength="8" />
+          <button id="join-room">Join room</button>
+        </div>
+      </section>
+
+      <section id="screen-room" class="panel hidden">
+        <div class="room-meta">
+          <div>
+            <span class="label">Room</span>
+            <span id="room-id"></span>
+          </div>
+          <div>
+            <span class="label">Phase</span>
+            <span id="room-phase">lobby</span>
+          </div>
+        </div>
+
+        <div id="lobby" class="block">
+          <h2>Lobby</h2>
+          <div id="players" class="players"></div>
+          <div class="row">
+            <button id="add-bot">Add bot</button>
+            <button id="start-game">Start game</button>
+          </div>
+          <p class="hint">Invite link: <span id="invite-link"></span></p>
+        </div>
+
+        <div id="game" class="block hidden">
+          <div class="row status">
+            <div>Pass: <span id="pass-dir">left</span></div>
+            <div>Turn: <span id="current-turn">-</span></div>
+          </div>
+
+          <div class="table">
+            <div id="seat-north" class="seat north"></div>
+            <div id="seat-west" class="seat west"></div>
+            <div id="seat-east" class="seat east"></div>
+            <div id="seat-south" class="seat south"></div>
+            <div class="table-center">
+              <div class="label" id="table-center">Trick</div>
+            </div>
+          </div>
+
+          <div id="hand" class="hand"></div>
+
+          <div id="pass-controls" class="row hidden">
+            <button id="submit-pass">Send 3 cards</button>
+          </div>
+
+          <div id="round-controls" class="row hidden">
+            <button id="start-round">Next round</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/client.js"></script>
+  </body>
+</html>
