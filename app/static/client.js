@@ -197,7 +197,10 @@ function renderTable(data) {
 
   const center = el("table-center");
   if (center) {
-    if (data.phase === "round_end") {
+    if (data.phase === "game_over") {
+      const winner = nameMap.get(data.winner_id) || "Player";
+      center.textContent = `End game: ${winner} wins 🎉`;
+    } else if (data.phase === "round_end") {
       center.textContent = "Round over";
     } else if (data.phase === "playing" && !data.active_trick) {
       const currentName = nameMap.get(data.current_turn) || "player";
@@ -247,7 +250,8 @@ function updatePassButton() {
 
 function renderState(data) {
   el("room-id").textContent = data.room_id;
-  el("room-phase").textContent = data.phase;
+  const phaseLabel = data.phase ? data.phase.replace("_", " ") : "";
+  el("room-phase").textContent = phaseLabel;
   el("invite-link").textContent = `${window.location.origin}/room/${data.room_id}`;
 
   renderPlayers(data.players);
@@ -290,6 +294,26 @@ function init() {
     }
   });
   el("start-round").addEventListener("click", () => send({ type: "start_round" }));
+  el("copy-invite").addEventListener("click", async () => {
+    const link = el("invite-link").textContent.trim();
+    if (!link) return;
+    const button = el("copy-invite");
+    const feedback = el("copy-feedback");
+    try {
+      await navigator.clipboard.writeText(link);
+      if (feedback) feedback.textContent = "Copied!";
+      if (button) button.classList.add("copied");
+    } catch (err) {
+      window.prompt("Copy invite link:", link);
+      if (feedback) feedback.textContent = "Copy manually";
+    }
+    if (button) {
+      setTimeout(() => button.classList.remove("copied"), 1200);
+    }
+    if (feedback) {
+      setTimeout(() => (feedback.textContent = ""), 1600);
+    }
+  });
 
   const path = window.location.pathname;
   if (path.startsWith("/room/")) {

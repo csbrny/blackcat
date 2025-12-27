@@ -34,10 +34,11 @@ class GameState:
     current_turn: Optional[str] = None
     round_index: int = 0
     trick_index: int = 0
-    phase: str = "lobby"  # lobby, passing, playing, round_end
+    phase: str = "lobby"  # lobby, passing, playing, round_end, game_over
     pass_dir: int = PASS_LEFT
     pending_pass: Dict[str, List[Card]] = field(default_factory=dict)
     taken_points_round: Dict[str, int] = field(default_factory=dict)
+    winner_id: Optional[str] = None
 
     def player_order(self) -> List[str]:
         return [p.id for p in self.players]
@@ -258,6 +259,9 @@ class HeartsGame:
                 self.state.scores[pid] += points
 
         self.state.round_index += 1
+        if max(self.state.scores.values(), default=0) >= 100:
+            self.state.phase = "game_over"
+            self.state.winner_id = min(self.state.scores, key=self.state.scores.get)
 
     def start_next_round(self) -> bool:
         if self.state.phase != "round_end":

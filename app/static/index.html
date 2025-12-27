@@ -3,13 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Blackcat Hearts</title>
+    <title>Black Cat</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
     <main class="wrap">
       <header class="header">
-        <h1>Blackcat Hearts</h1>
+        <h1>Black Cat aka Hearts</h1>
         <p>Simple online Hearts with bots and invite links.</p>
       </header>
 
@@ -52,7 +53,12 @@
             <button id="add-bot">Add bot</button>
             <button id="start-game">Start game</button>
           </div>
-          <p class="hint">Invite link: <span id="invite-link"></span></p>
+          <p class="hint">
+            Invite link:
+            <span id="invite-link"></span>
+            <button id="copy-invite" class="link-button" type="button">Copy</button>
+            <span id="copy-feedback" class="copy-feedback"></span>
+          </p>
         </div>
 
         <div id="game" class="block hidden">

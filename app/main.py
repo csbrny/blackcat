@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import deque
 import secrets
 import string
 from dataclasses import dataclass, field
@@ -15,6 +16,12 @@ from .ai import choose_pass, choose_play
 from .game import HeartsGame, PlayerState, PASS_LEFT, PASS_RIGHT, PASS_ACROSS, PASS_HOLD
 
 app = FastAPI()
+
+MAX_ROOMS = 10
+ROOM_ID_LEN = 8
+IDLE_TIMEOUT_SEC = 15 * 60
+RATE_LIMIT_WINDOW_SEC = 5.0
+RATE_LIMIT_MAX = 20
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -31,6 +38,9 @@ class Room:
     next_action_at: float = 0.0
     bot_task: Optional[asyncio.Task] = None
     trick_clear_task: Optional[asyncio.Task] = None
+    loop_task: Optional[asyncio.Task] = None
+    last_seen: Dict[str, float] = field(default_factory=dict)
+    rate_limit: Dict[str, deque] = field(default_factory=dict)
 
     def add_player(self, name: str, is_bot: bool = False) -> Optional[PlayerState]:
         if len(self.players) >= self.max_players:
@@ -61,7 +71,7 @@ class Room:
 
 def room_id() -> str:
     alphabet = string.ascii_uppercase + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(6))
+    return "".join(secrets.choice(alphabet) for _ in range(ROOM_ID_LEN))
 
 
 rooms: Dict[str, Room] = {}
@@ -79,6 +89,8 @@ async def room_page(room_id: str) -> FileResponse:
 
 @app.post("/api/rooms")
 async def create_room() -> JSONResponse:
+    if len(rooms) >= MAX_ROOMS:
+        raise HTTPException(status_code=429, detail="Room limit reached")
     rid = room_id()
     rooms[rid] = Room(id=rid)
     return JSONResponse({"room_id": rid})
@@ -100,13 +112,22 @@ async def room_socket(websocket: WebSocket, room_id: str, name: Optional[str] = 
             await websocket.close(code=1008)
             return
         room.connections[player.id] = websocket
+        room.last_seen[player.id] = time.monotonic()
+        room.rate_limit[player.id] = deque()
 
     await send_state(room, player.id)
     await broadcast_state(room)
+    await ensure_bot_turn(room)
+    start_room_loop(room_id, room)
 
     try:
         while True:
             data = await websocket.receive_json()
+            now = time.monotonic()
+            if not allow_message(room, player.id, now):
+                await websocket.close(code=1008)
+                break
+            room.last_seen[player.id] = now
             action = data.get("type")
             async with room.lock:
                 if action == "add_bot":
@@ -120,8 +141,9 @@ async def room_socket(websocket: WebSocket, room_id: str, name: Optional[str] = 
                         room.next_action_at = 0.0
                 elif action == "start_round":
                     if player.id == room.host_id and room.game:
-                        room.game.start_next_round()
-                        room.next_action_at = 0.0
+                        if room.game.state.phase != "game_over":
+                            room.game.start_next_round()
+                            room.next_action_at = 0.0
                 elif action == "pass_cards" and room.game:
                     cards = data.get("cards", [])
                     room.game.submit_pass(player.id, cards)
@@ -142,10 +164,13 @@ async def room_socket(websocket: WebSocket, room_id: str, name: Optional[str] = 
                 await advance_bots(room)
 
             await broadcast_state(room)
+            await ensure_bot_turn(room)
 
     except WebSocketDisconnect:
         async with room.lock:
             room.remove_player(player.id)
+            room.last_seen.pop(player.id, None)
+            room.rate_limit.pop(player.id, None)
         await broadcast_state(room)
 
 
@@ -189,6 +214,7 @@ async def send_state(room: Room, player_id: str) -> None:
         "hearts_broken": game.state.hearts_broken if game else False,
         "scores": game.state.scores if game else {},
         "round_points": game.state.taken_points_round if game else {},
+        "winner_id": game.state.winner_id if game else None,
         "your_id": player_id,
         "hand": game.state.hands.get(player_id, []) if game else [],
         "legal_moves": game.get_legal_moves(player_id) if game and game.state.phase == "playing" else [],
@@ -213,6 +239,66 @@ async def send_state(room: Room, player_id: str) -> None:
 async def broadcast_state(room: Room) -> None:
     for pid in list(room.connections.keys()):
         await send_state(room, pid)
+
+def start_room_loop(room_id: str, room: Room) -> None:
+    if room.loop_task and not room.loop_task.done():
+        return
+
+    async def _runner() -> None:
+        try:
+            while True:
+                await asyncio.sleep(0.5)
+                async with room.lock:
+                    if not room.connections:
+                        rooms.pop(room_id, None)
+                        break
+                    reap_idle_players(room, time.monotonic())
+                    await ensure_bot_turn(room)
+        finally:
+            room.loop_task = None
+
+    room.loop_task = asyncio.create_task(_runner())
+
+async def ensure_bot_turn(room: Room) -> None:
+    game = room.game
+    if not game or game.state.phase != "playing":
+        return
+    if time.monotonic() < room.next_action_at:
+        return
+    current = game.state.current_turn
+    if not current:
+        return
+    player = room.players.get(current)
+    if not player or not player.is_bot:
+        return
+    if room.bot_task and not room.bot_task.done():
+        return
+    schedule_bot_tick(room, 0.8)
+
+def allow_message(room: Room, player_id: str, now: float) -> bool:
+    window = room.rate_limit.get(player_id)
+    if window is None:
+        return True
+    while window and now - window[0] > RATE_LIMIT_WINDOW_SEC:
+        window.popleft()
+    if len(window) >= RATE_LIMIT_MAX:
+        return False
+    window.append(now)
+    return True
+
+def reap_idle_players(room: Room, now: float) -> None:
+    stale = [
+        pid
+        for pid, ts in room.last_seen.items()
+        if now - ts > IDLE_TIMEOUT_SEC
+    ]
+    for pid in stale:
+        ws = room.connections.get(pid)
+        if ws:
+            asyncio.create_task(ws.close(code=1001))
+        room.remove_player(pid)
+        room.last_seen.pop(pid, None)
+        room.rate_limit.pop(pid, None)
 
 def schedule_bot_tick(room: Room, delay: float) -> None:
     room.next_action_at = time.monotonic() + max(0.0, delay)
