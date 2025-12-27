@@ -5,6 +5,7 @@ import time
 from collections import deque
 import secrets
 import string
+import random
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
@@ -22,6 +23,19 @@ ROOM_ID_LEN = 8
 IDLE_TIMEOUT_SEC = 15 * 60
 RATE_LIMIT_WINDOW_SEC = 5.0
 RATE_LIMIT_MAX = 20
+BOT_NAMES = [
+    "Sarge",
+    "Bones",
+    "Crash",
+    "Anarki",
+    "Visor",
+    "Ranger",
+    "Slash",
+    "Keel",
+    "Orbb",
+    "Xaero",
+    "Grunt",
+]
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -41,6 +55,7 @@ class Room:
     loop_task: Optional[asyncio.Task] = None
     last_seen: Dict[str, float] = field(default_factory=dict)
     rate_limit: Dict[str, deque] = field(default_factory=dict)
+    used_bot_names: set[str] = field(default_factory=set)
 
     def add_player(self, name: str, is_bot: bool = False) -> Optional[PlayerState]:
         if len(self.players) >= self.max_players:
@@ -63,8 +78,9 @@ class Room:
             if player:
                 player.is_bot = True
             return
-        if player_id in self.players:
-            self.players.pop(player_id, None)
+        player = self.players.pop(player_id, None)
+        if player and player.is_bot:
+            self.used_bot_names.discard(player.name)
         if self.host_id == player_id:
             self.host_id = next(iter(self.players), None)
 
@@ -132,7 +148,12 @@ async def room_socket(websocket: WebSocket, room_id: str, name: Optional[str] = 
             async with room.lock:
                 if action == "add_bot":
                     if player.id == room.host_id:
-                        bot_name = f"Bot {len([p for p in room.players.values() if p.is_bot]) + 1}"
+                        available = [n for n in BOT_NAMES if n not in room.used_bot_names]
+                        if available:
+                            bot_name = random.choice(available)
+                            room.used_bot_names.add(bot_name)
+                        else:
+                            bot_name = f"Bot {len([p for p in room.players.values() if p.is_bot]) + 1}"
                         room.add_player(bot_name, is_bot=True)
                 elif action == "start_game":
                     if player.id == room.host_id and len(room.players) == room.max_players:
