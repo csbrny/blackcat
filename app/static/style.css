@@ -23,7 +23,8 @@ body {
 .wrap {
   max-width: 980px;
   margin: 0 auto;
-  padding: 24px;
+  padding-top: 24px;
+  padding-bottom: 24px;
 }
 
 .header h1 {
@@ -282,12 +283,10 @@ button:disabled {
 
   .table {
     grid-template-areas:
-      "north"
-      "west"
-      "center"
-      "east"
-      "south";
-    grid-template-columns: 1fr;
+      "north east"
+      "center center"
+      "west south";
+    grid-template-columns: 1fr 1fr;
     min-height: auto;
   }
 
